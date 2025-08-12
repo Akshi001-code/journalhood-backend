@@ -1,0 +1,260 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // WARNING: These rules are for development only. DO NOT use in production!
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // Helper functions for authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAuthor(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper functions for role-based access
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Role check functions
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'super-admin';
+    }
+    
+    function isDistrictAdmin() {
+      return isAuthenticated() && getUserRole() == 'district-admin';
+    }
+    
+    function isSchoolAdmin() {
+      return isAuthenticated() && getUserRole() == 'school-admin';
+    }
+    
+    function isTeacher() {
+      return isAuthenticated() && getUserRole() == 'teacher';
+    }
+    
+    function isStudent() {
+      return isAuthenticated() && getUserRole() == 'student';
+    }
+    
+    // Relationship check functions
+    function belongsToSameDistrict(districtId) {
+      return getUserData().districtId == districtId;
+    }
+    
+    function belongsToSameSchool(schoolId) {
+      return getUserData().schoolId == schoolId;
+    }
+    
+    function belongsToSameClass(classId) {
+      return getUserData().classId == classId;
+    }
+    
+    function isTeacherOfClass(classId) {
+      return isTeacher() && belongsToSameClass(classId);
+    }
+    
+    function isStudentInClass(classId) {
+      return isStudent() && belongsToSameClass(classId);
+    }
+    
+    function noSuperAdminExists() {
+      let superAdmins = getAfter(/databases/$(database)/documents/users).where('role', '==', 'super-admin').size();
+      return superAdmins == 0;
+    }
+
+    // Helper function to check if a value exists in a map's values
+    function hasValue(map, value) {
+      return value in map;
+    }
+
+    // Helper function to check if school exists in any district
+    function schoolExistsInAnyDistrict(data, schoolId) {
+      return schoolId in data.schoolIds;
+    }
+
+    // Helper function to check if class exists in any school
+    function classExistsInAnySchool(data, classId) {
+      return classId in data.classIds;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Allow reading users collection for super admin check
+      allow list: if true;
+      
+      // Allow initial super admin creation OR user creating their own document
+      allow create: if (noSuperAdminExists() && request.resource.data.role == 'super-admin')
+                    || isAuthor(userId);
+      
+      // Allow users to read their own data and update password
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthor(userId);
+      
+      // Super admins can read/write all users
+      allow read, write: if isSuperAdmin();
+      
+      // District admins can read/write users in their district
+      allow read, write: if isDistrictAdmin() && belongsToSameDistrict(resource.data.districtId);
+      
+      // School admins can read/write users in their school
+      allow read, write: if isSchoolAdmin() && belongsToSameSchool(resource.data.schoolId);
+      
+      // Teachers can read students in their classes
+      allow read: if isTeacher() && resource.data.role == 'student' && belongsToSameClass(resource.data.classId);
+    }
+
+    // Diary entries collection (main)
+    match /diaryEntries/{userId}/entries/{entryId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // Allow teachers to read their students' entries
+      allow read: if isTeacher() && belongsToSameClass(get(/databases/$(database)/documents/users/$(userId)).data.classId);
+      // Allow school admins to read entries from their school
+      allow read: if isSchoolAdmin() && belongsToSameSchool(get(/databases/$(database)/documents/users/$(userId)).data.schoolId);
+      // Allow district admins to read entries from their district
+      allow read: if isDistrictAdmin() && belongsToSameDistrict(get(/databases/$(database)/documents/users/$(userId)).data.districtId);
+      // Allow super admins to read all entries
+      allow read: if isSuperAdmin();
+    }
+
+    // Diary entries backup collection
+    match /diaryEntriesBackup/{userId}/entries/{entryId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // Allow teachers to read their students' backup entries
+      allow read: if isTeacher() && belongsToSameClass(get(/databases/$(database)/documents/users/$(userId)).data.classId);
+      // Allow school admins to read backup entries from their school
+      allow read: if isSchoolAdmin() && belongsToSameSchool(get(/databases/$(database)/documents/users/$(userId)).data.schoolId);
+      // Allow district admins to read backup entries from their district
+      allow read: if isDistrictAdmin() && belongsToSameDistrict(get(/databases/$(database)/documents/users/$(userId)).data.districtId);
+      // Allow super admins to read all backup entries
+      allow read: if isSuperAdmin();
+    }
+
+    // Districts collection
+    match /districts/{districtId} {
+      // Super admins can read/write all districts
+      allow read, write: if isSuperAdmin();
+      
+      // District admins can read/write their own district
+      allow read, write: if isDistrictAdmin() && belongsToSameDistrict(districtId);
+      
+      // School admins can read their district
+      allow read: if isSchoolAdmin() && belongsToSameDistrict(districtId);
+      
+      // Teachers and students can read their district
+      allow read: if (isTeacher() || isStudent()) && belongsToSameDistrict(districtId);
+    }
+
+    // Schools collection
+    match /schools/{schoolId} {
+      // Super admins can read/write all schools
+      allow read, write: if isSuperAdmin();
+      
+      // District admins can read/write schools in their district
+      allow read, write: if isDistrictAdmin() && belongsToSameDistrict(resource.data.districtId);
+      
+      // School admins can read/write their own school
+      allow read, write: if isSchoolAdmin() && belongsToSameSchool(schoolId);
+      
+      // Teachers can read/write in their school
+      allow read, write: if isTeacher() && belongsToSameSchool(schoolId);
+      
+      // Students can read their school
+      allow read: if isStudent() && belongsToSameSchool(schoolId);
+    }
+
+    // Classes collection
+    match /classes/{classId} {
+      // Super admins can read/write all classes
+      allow read, write: if isSuperAdmin();
+      
+      // District admins can read/write classes in their district
+      allow read, write: if isDistrictAdmin() && belongsToSameDistrict(resource.data.districtId);
+      
+      // School admins can read/write classes in their school
+      allow read, write: if isSchoolAdmin() && belongsToSameSchool(resource.data.schoolId);
+      
+      // Teachers can read/write their own classes
+      allow read, write: if isTeacher() && belongsToSameClass(classId);
+      
+      // Students can read their own class and update specific fields
+      allow read: if isStudent() && belongsToSameClass(classId);
+      allow update: if isStudent() && belongsToSameClass(classId) &&
+                   request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentProgress', 'lastActivity']);
+    }
+
+    // Class analytics (aggregated data only)
+    match /class_analytics/{classId} {
+      // Teachers can read/write analytics for their classes
+      allow read, write: if isTeacherOfClass(classId);
+      
+      // School admins can read analytics for classes in their school
+      allow read: if isSchoolAdmin() && belongsToSameSchool(get(/databases/$(database)/documents/classes/$(classId)).data.schoolId);
+      
+      // District admins can read analytics for classes in their district
+      allow read: if isDistrictAdmin() && belongsToSameDistrict(get(/databases/$(database)/documents/classes/$(classId)).data.districtId);
+      
+      // Super admins can read all analytics
+      allow read: if isSuperAdmin();
+      
+      // System can write analytics (for AI processing)
+      allow write: if request.auth.token.admin == true;
+    }
+
+    // Analyzed data collection
+    match /analyzedData/{docId} {
+      // Super admin can read and write all analyzed data
+      allow read, write: if isSuperAdmin();
+      
+      // District admin can read their district's data
+      allow read: if isDistrictAdmin() && 
+                 resource.data.districtMetrics[getUserData().districtId] != null;
+      
+      // School admin can read their school's data
+      allow read: if isSchoolAdmin() && 
+                 resource.data.schools[getUserData().schoolId] != null;
+      
+      // Teacher can read their class's data
+      allow read: if isTeacher() && 
+                 resource.data.classes[getUserData().classId] != null;
+
+      // Allow system service account to write analyzed data
+      allow write: if request.auth.token.admin == true;
+    }
+
+    // Daily analytics collection
+    match /dailyAnalytics/{date} {
+      // Super admin can read and write all daily analytics
+      allow read, write: if isSuperAdmin();
+      
+      // District admin can read their district's daily analytics
+      allow read: if isDistrictAdmin() && 
+                 resource.data.districts[getUserData().districtId] != null;
+      
+      // School admin can read their school's daily analytics
+      allow read: if isSchoolAdmin() && 
+                 resource.data.schools[getUserData().schoolId] != null;
+      
+      // Teacher can read their class's daily analytics
+      allow read: if isTeacher() && 
+                 resource.data.classes[getUserData().classId] != null;
+
+      // Allow system service account to write daily analytics
+      allow write: if request.auth.token.admin == true;
+    }
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 
