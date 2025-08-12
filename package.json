@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node ./dist/index.js",
+    "start:tsx": "NODE_ENV=production tsx ./src/index.ts"
     "dev": "tsx --watch ./src/index.ts",
     "build": "tsc",
     "update-relationships": "ts-node src/scripts/update-user-relationships.ts",
