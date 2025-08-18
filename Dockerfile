@@ -10,18 +10,18 @@ WORKDIR /app
 # Install full deps (incl. dev) in a separate stage to build TypeScript
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --include=dev
+RUN --mount=type=cache,id=journalhood-npm-cache,target=/root/.npm npm ci --include=dev
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Use npm cache dir, DO NOT mount anything inside node_modules
-RUN --mount=type=cache,target=/root/.npm npm run build
+RUN --mount=type=cache,id=journalhood-npm-cache,target=/root/.npm npm run build
 
 # Install only production deps for runtime image
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
+RUN --mount=type=cache,id=journalhood-npm-cache,target=/root/.npm npm ci --omit=dev
 
 FROM node:${NODE_VERSION}-slim AS runner
 ENV NODE_ENV=production \
