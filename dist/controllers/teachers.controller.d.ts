@@ -1,0 +1,17 @@
+import { Request, Response } from "express";
+export declare const createStudent: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const updateStudent: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const deleteStudent: (req: Request, res: Response) => Promise<void>;
+export declare const getStudents: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const suspendOrUnsuspendStudent: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const resetDiaryEntriesPin: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getDashboard: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getClass: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getTeacherAnalytics: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getTeacherInfo: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getAssignedResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getResourceDetails: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const shareResourceWithStudents: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getSharedResources: (req: Request, res: Response) => Promise<void>;
+export declare const getDeliveredResources: (req: Request, res: Response) => Promise<Response<any, Record<string, any>>>;
+export declare const getTeacherStudents: (req: any, res: any) => Promise<any>;

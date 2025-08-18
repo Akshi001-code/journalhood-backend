@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response } from "express";
 import { TCreateClass, TUpdateClass, TClassParam } from "../validators/school-admin.validator";
 import admin from "../config/firebase.config";

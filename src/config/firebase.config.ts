@@ -1,29 +1,60 @@
 import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
+import { configDotenv } from "dotenv";
 
-// Try to use environment variables first (more secure for production)
-// If they don't exist, fall back to the JSON file (for development)
-let credential;
+// Load environment variables as early as possible so Firebase sees them
+configDotenv();
 
-if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
-  // Use environment variables (recommended for production)
-  credential = admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  });
-} else {
-  // Fall back to JSON file (for development)
+// Initialize Firebase Admin without ever reading JSON from the repo.
+// Prefer env vars; otherwise use Application Default Credentials (e.g., GOOGLE_APPLICATION_CREDENTIALS).
+
+function initFirebaseAdmin() {
+  const hasEnvCreds = !!(
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_PRIVATE_KEY &&
+    process.env.FIREBASE_CLIENT_EMAIL
+  );
+
+  if (hasEnvCreds) {
+    const credential = admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID!,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+    });
+    admin.initializeApp({ credential });
+    return;
+  }
+
+  // Fallback 1: Local JSON (only for local dev). Looks for server/src/serviceAccount.json
+  const localJsonPath = path.resolve(__dirname, "../serviceAccount.json");
+  if (fs.existsSync(localJsonPath)) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const serviceAccount = require(localJsonPath);
+      const credential = admin.credential.cert(serviceAccount as admin.ServiceAccount);
+      admin.initializeApp({ credential });
+      return;
+    } catch (e) {
+      console.error("Found local serviceAccount.json but failed to initialize:", e);
+    }
+  }
+
+  // Fallback 2: Application Default Credentials if neither env nor local JSON
   try {
-    const serviceAccount = require("../serviceAccount.json");
-    credential = admin.credential.cert(serviceAccount as admin.ServiceAccount);
-  } catch (error) {
-    console.error("Firebase service account file not found. Please add serviceAccount.json or set environment variables.");
+    const credential = admin.credential.applicationDefault();
+    admin.initializeApp({ credential });
+    return;
+  } catch (e) {
+    console.error(
+      "Firebase Admin initialization failed. Provide env vars (FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL) or set GOOGLE_APPLICATION_CREDENTIALS to a service account JSON path outside the repo."
+    );
     process.exit(1);
   }
 }
 
-admin.initializeApp({
-  credential: credential,
-});
+initFirebaseAdmin();
 
 export default admin;
+
+

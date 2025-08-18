@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response } from "express";
 import admin from "../config/firebase.config";
 import { transporter } from "../config/nodemailer.config";

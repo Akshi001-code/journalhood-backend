@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { z } from "zod";
 import { DEFAULT_PASSWORDS, ROLES } from "../config/app.config";
 

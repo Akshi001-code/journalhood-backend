@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import { configDotenv } from "dotenv";
+
+// Load env vars before computing transporter so IMPORT ORDER doesn't break config
+configDotenv();
 
 // SMTP configurations for different email providers, with optional env overrides
 const getEmailConfig = (email: string, password: string) => {
