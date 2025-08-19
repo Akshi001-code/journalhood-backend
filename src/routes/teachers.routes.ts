@@ -69,6 +69,12 @@ router.get(
   getTeacherAnalytics
 );
 
+router.get(
+  "/analytics/class",
+  verifyRole([ROLES.TEACHER]),
+  require("../controllers/teachers.controller").getTeacherClassAnalytics
+);
+
 // Students in teacher's class
 router.get(
   "/students",

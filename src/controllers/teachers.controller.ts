@@ -1916,3 +1916,108 @@ export const getTeacherStudents = async (req, res) => {
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+// --- NEW: getTeacherClassAnalytics ---
+export const getTeacherClassAnalytics = async (req: Request, res: Response) => {
+  try {
+    const { uid } = req.user!;
+    // Get teacher's custom claims
+    const teacherData = await admin.auth().getUser(uid);
+    if (!teacherData.customClaims) {
+      return res.status(400).json({
+        error: "Teacher data not found",
+        details: "No custom claims found for teacher"
+      });
+    }
+    const teacherClaims = teacherData.customClaims as any;
+    // Get classId from claims (prefer direct classId, fallback to grade+division)
+    let classId: string | undefined = teacherClaims.classId;
+    if (!classId && teacherClaims.gradeId && teacherClaims.division) {
+      classId = `${teacherClaims.gradeId}_${teacherClaims.division}`;
+    }
+    const className = teacherClaims.gradeName && teacherClaims.division ? `${teacherClaims.gradeName} ${teacherClaims.division}` : undefined;
+    const schoolId = teacherClaims.schoolId;
+    // Debug logs
+    console.log('[TeacherClassAnalytics] teacherClaims:', { classId, className, schoolId, teacherClaims });
+    // Get latest analytics data from Firestore
+    const analyticsSnapshot = await admin.firestore()
+      .collection('analyzedData')
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .get();
+    if (analyticsSnapshot.empty) {
+      return res.status(404).json({
+        error: "No analytics data found",
+        message: "Analytics data has not been generated yet. Please run analysis first."
+      });
+    }
+    const latestAnalytics = analyticsSnapshot.docs[0].data();
+    const classStats = latestAnalytics.classStats || {};
+    const classStatsKeys = Object.keys(classStats);
+    console.log('[TeacherClassAnalytics] classStats keys:', classStatsKeys);
+    // Try direct classId
+    let classData = classId ? classStats[classId] : undefined;
+    let usedFallback = '';
+    // Fallback: try by className
+    if (!classData && className) {
+      classData = Object.values(classStats).find((c: any) => c.className === className);
+      if (classData) usedFallback = 'className';
+    }
+    // Fallback: first class for this school
+    if (!classData && schoolId) {
+      classData = Object.values(classStats).find((c: any) => c.schoolId === schoolId);
+      if (classData) usedFallback = 'schoolId';
+    }
+    // Fallback: first class in classStats
+    if (!classData) {
+      classData = Object.values(classStats)[0];
+      if (classData) usedFallback = 'firstClass';
+    }
+    if (!classData) {
+      console.warn('[TeacherClassAnalytics] No classData found for teacher after all fallbacks.');
+      return res.status(200).json({
+        data: {
+          id: latestAnalytics.id,
+          timestamp: latestAnalytics.timestamp,
+          totalWords: 0,
+          totalEntries: 0,
+          classStats: {},
+          studentStats: {},
+          schoolStats: {},
+          districtStats: {}
+        }
+      });
+    }
+    console.log('[TeacherClassAnalytics] Used fallback:', usedFallback, 'classData:', classData);
+    // Find student stats for this class
+    const studentStats = Object.entries(latestAnalytics.studentStats || {})
+      .filter(([_, s]: [string, any]) => s.classId === classData.classId)
+      .reduce((acc, [studentId, s]) => { acc[studentId] = s; return acc; }, {});
+    // Find school stats for this class
+    const schoolStats = classData.schoolId && latestAnalytics.schoolStats?.[classData.schoolId]
+      ? { [classData.schoolId]: latestAnalytics.schoolStats[classData.schoolId] }
+      : {};
+    // Find district stats for this class
+    const districtStats = classData.districtId && latestAnalytics.districtStats?.[classData.districtId]
+      ? { [classData.districtId]: latestAnalytics.districtStats[classData.districtId] }
+      : {};
+    // Build response
+    const filteredAnalytics = {
+      id: latestAnalytics.id,
+      timestamp: latestAnalytics.timestamp,
+      totalWords: classData.totalWords || 0,
+      totalEntries: classData.totalEntries || 0,
+      classStats: { [classData.classId || classId || 'unknown']: classData },
+      studentStats,
+      schoolStats,
+      districtStats
+    };
+    return res.status(200).json({ data: filteredAnalytics });
+  } catch (error) {
+    console.error('Error getting teacher class analytics:', error);
+    return res.status(500).json({
+      error: "Failed to get teacher class analytics",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+};
