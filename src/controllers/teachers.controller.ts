@@ -1079,12 +1079,31 @@ export const getTeacherAnalytics = async (req: Request, res: Response) => {
     console.log('📊 Available classIds in Firebase:', Object.keys(latestAnalytics.classStats || {}));
     console.log('📊 Looking for classId:', classId);
 
-    // Filter data for teacher's class
-    const classData = latestAnalytics.classStats?.[classId];
-    console.log('📊 Found classData:', classData);
-    
+    // Filter data for teacher's class (robust matching)
+    let classData = latestAnalytics.classStats?.[classId];
+    let resolvedClassId: string = classId;
+    console.log('📊 Found classData by classId:', classData);
+
     if (!classData) {
-      console.log('❌ No classData found for classId:', classId);
+      // Try to find by className fallback (e.g., "Grade 6 A")
+      const desiredClassName = teacherClaims.gradeName && teacherClaims.division
+        ? `${teacherClaims.gradeName} ${teacherClaims.division}`
+        : undefined;
+
+      if (desiredClassName) {
+        const match = Object.entries(latestAnalytics.classStats || {}).find(([_key, value]: [string, any]) => {
+          return (value && typeof value.className === 'string' && value.className === desiredClassName);
+        });
+        if (match) {
+          resolvedClassId = match[0];
+          classData = match[1];
+          console.log('✅ Resolved class by className fallback:', { resolvedClassId, className: classData.className });
+        }
+      }
+    }
+
+    if (!classData) {
+      console.log('❌ No classData found (after fallback) for classId:', classId);
       return res.status(200).json({
         data: {
           id: latestAnalytics.id,
@@ -1104,8 +1123,17 @@ export const getTeacherAnalytics = async (req: Request, res: Response) => {
     console.log('👥 Total students in analytics:', Object.keys(allStudentStats).length);
     console.log('👥 Sample student classIds:', Object.values(allStudentStats).slice(0, 3).map((s: any) => s.classId));
     
+    const desiredClassName = teacherClaims.gradeName && teacherClaims.division
+      ? `${teacherClaims.gradeName} ${teacherClaims.division}`
+      : undefined;
+
     const studentStats = Object.entries(allStudentStats)
-      .filter(([_, studentData]: [string, any]) => studentData.classId === classId)
+      .filter(([_, studentData]: [string, any]) => {
+        if (!studentData) return false;
+        const byId = studentData.classId === resolvedClassId;
+        const byName = desiredClassName && studentData.className === desiredClassName;
+        return Boolean(byId || byName);
+      })
       .reduce((acc, [studentId, studentData]) => {
         acc[studentId] = studentData;
         return acc;
@@ -1129,7 +1157,7 @@ export const getTeacherAnalytics = async (req: Request, res: Response) => {
       totalWords: classData.totalWords || 0,
       totalEntries: classData.totalEntries || 0,
       classStats: {
-        [classId]: classData
+        [resolvedClassId]: classData
       },
       studentStats,
       schoolStats: {

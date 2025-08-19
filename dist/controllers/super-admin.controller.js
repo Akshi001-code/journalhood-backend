@@ -813,16 +813,20 @@ const analyzeDiaryEntries = async (req, res) => {
             const safeSchoolId = (typeof schoolId === 'string' && schoolId.trim().length > 0) ? schoolId : 'unknown_school';
             const safeDistrictId = (typeof districtId === 'string' && districtId.trim().length > 0) ? districtId : 'unknown_district';
             const safeEmotion = (typeof emotion === 'string' && emotion.trim().length > 0) ? emotion : 'unknown';
+            const safeStudentName = (typeof studentName === 'string' && studentName.trim().length > 0) ? studentName : 'Unknown Student';
+            const safeClassName = (typeof className === 'string' && className.trim().length > 0) ? className : 'Unknown Class';
+            const safeSchoolName = (typeof schoolName === 'string' && schoolName.trim().length > 0) ? schoolName : 'Unknown School';
+            const safeDistrictName = (typeof districtName === 'string' && districtName.trim().length > 0) ? districtName : 'Unknown District';
             // Initialize stats objects if they don't exist
             if (!stats.studentStats[studentId]) {
                 stats.studentStats[studentId] = {
-                    studentName,
-                    classId,
-                    className,
-                    schoolId,
-                    schoolName,
-                    districtId,
-                    districtName,
+                    studentName: safeStudentName,
+                    classId: safeClassId,
+                    className: safeClassName,
+                    schoolId: safeSchoolId,
+                    schoolName: safeSchoolName,
+                    districtId: safeDistrictId,
+                    districtName: safeDistrictName,
                     totalWords: 0,
                     avgWordsPerEntry: 0,
                     totalEntries: 0,
@@ -836,11 +840,11 @@ const analyzeDiaryEntries = async (req, res) => {
             }
             if (!stats.classStats[safeClassId]) {
                 stats.classStats[safeClassId] = {
-                    className,
-                    schoolId,
-                    schoolName,
-                    districtId,
-                    districtName,
+                    className: safeClassName,
+                    schoolId: safeSchoolId,
+                    schoolName: safeSchoolName,
+                    districtId: safeDistrictId,
+                    districtName: safeDistrictName,
                     totalWords: 0,
                     avgWordsPerStudent: 0,
                     totalEntries: 0,
@@ -854,9 +858,9 @@ const analyzeDiaryEntries = async (req, res) => {
             }
             if (!stats.schoolStats[safeSchoolId]) {
                 stats.schoolStats[safeSchoolId] = {
-                    schoolName,
-                    districtId,
-                    districtName,
+                    schoolName: safeSchoolName,
+                    districtId: safeDistrictId,
+                    districtName: safeDistrictName,
                     totalWords: 0,
                     avgWordsPerStudent: 0,
                     totalEntries: 0,
@@ -874,7 +878,7 @@ const analyzeDiaryEntries = async (req, res) => {
             }
             if (!stats.districtStats[safeDistrictId]) {
                 stats.districtStats[safeDistrictId] = {
-                    districtName,
+                    districtName: safeDistrictName,
                     totalWords: 0,
                     avgWordsPerStudent: 0,
                     totalEntries: 0,
