@@ -808,6 +808,11 @@ const analyzeDiaryEntries = async (req, res) => {
         // Process each entry
         for (const entry of entries) {
             const { studentId, studentName, classId, className, schoolId, schoolName, districtId, districtName, content, emotion, timestamp } = entry;
+            // Sanitize IDs and categorizations used as object keys to avoid empty-string field names in Firestore
+            const safeClassId = (typeof classId === 'string' && classId.trim().length > 0) ? classId : 'unknown_class';
+            const safeSchoolId = (typeof schoolId === 'string' && schoolId.trim().length > 0) ? schoolId : 'unknown_school';
+            const safeDistrictId = (typeof districtId === 'string' && districtId.trim().length > 0) ? districtId : 'unknown_district';
+            const safeEmotion = (typeof emotion === 'string' && emotion.trim().length > 0) ? emotion : 'unknown';
             // Initialize stats objects if they don't exist
             if (!stats.studentStats[studentId]) {
                 stats.studentStats[studentId] = {
@@ -829,8 +834,8 @@ const analyzeDiaryEntries = async (req, res) => {
                     lastEntryDate: ''
                 };
             }
-            if (!stats.classStats[classId]) {
-                stats.classStats[classId] = {
+            if (!stats.classStats[safeClassId]) {
+                stats.classStats[safeClassId] = {
                     className,
                     schoolId,
                     schoolName,
@@ -847,8 +852,8 @@ const analyzeDiaryEntries = async (req, res) => {
                     emotionDistribution: {}
                 };
             }
-            if (!stats.schoolStats[schoolId]) {
-                stats.schoolStats[schoolId] = {
+            if (!stats.schoolStats[safeSchoolId]) {
+                stats.schoolStats[safeSchoolId] = {
                     schoolName,
                     districtId,
                     districtName,
@@ -863,12 +868,12 @@ const analyzeDiaryEntries = async (req, res) => {
                     emotionDistribution: {},
                     classes: []
                 };
-                if (!stats.schoolStats[schoolId].classes.includes(classId)) {
-                    stats.schoolStats[schoolId].classes.push(classId);
+                if (!stats.schoolStats[safeSchoolId].classes.includes(safeClassId)) {
+                    stats.schoolStats[safeSchoolId].classes.push(safeClassId);
                 }
             }
-            if (!stats.districtStats[districtId]) {
-                stats.districtStats[districtId] = {
+            if (!stats.districtStats[safeDistrictId]) {
+                stats.districtStats[safeDistrictId] = {
                     districtName,
                     totalWords: 0,
                     avgWordsPerStudent: 0,
@@ -882,11 +887,11 @@ const analyzeDiaryEntries = async (req, res) => {
                     schools: [],
                     classes: []
                 };
-                if (!stats.districtStats[districtId].schools.includes(schoolId)) {
-                    stats.districtStats[districtId].schools.push(schoolId);
+                if (!stats.districtStats[safeDistrictId].schools.includes(safeSchoolId)) {
+                    stats.districtStats[safeDistrictId].schools.push(safeSchoolId);
                 }
-                if (!stats.districtStats[districtId].classes.includes(classId)) {
-                    stats.districtStats[districtId].classes.push(classId);
+                if (!stats.districtStats[safeDistrictId].classes.includes(safeClassId)) {
+                    stats.districtStats[safeDistrictId].classes.push(safeClassId);
                 }
             }
             // Calculate word count
@@ -907,7 +912,7 @@ const analyzeDiaryEntries = async (req, res) => {
             student.totalWords += wordCount;
             student.totalEntries++;
             student.avgWordsPerEntry = Math.round(student.totalWords / student.totalEntries);
-            student.emotionDistribution[emotion] = (student.emotionDistribution[emotion] || 0) + 1;
+            student.emotionDistribution[safeEmotion] = (student.emotionDistribution[safeEmotion] || 0) + 1;
             const entryDate = timestamp.toDate();
             if (!student.lastEntryDate || entryDate > new Date(student.lastEntryDate)) {
                 student.lastEntryDate = entryDate.toISOString();
@@ -921,10 +926,10 @@ const analyzeDiaryEntries = async (req, res) => {
                 student.monthlyAvgWords = Math.round(wordCount / student.monthlyEntries);
             }
             // Update class stats
-            const classStats = stats.classStats[classId];
+            const classStats = stats.classStats[safeClassId];
             classStats.totalWords += wordCount;
             classStats.totalEntries++;
-            classStats.emotionDistribution[emotion] = (classStats.emotionDistribution[emotion] || 0) + 1;
+            classStats.emotionDistribution[safeEmotion] = (classStats.emotionDistribution[safeEmotion] || 0) + 1;
             if (entryDate > weekAgo) {
                 classStats.weeklyEntries = (classStats.weeklyEntries || 0) + 1;
                 classStats.weeklyAvgWords = Math.round(wordCount / classStats.weeklyEntries);
@@ -934,10 +939,10 @@ const analyzeDiaryEntries = async (req, res) => {
                 classStats.monthlyAvgWords = Math.round(wordCount / classStats.monthlyEntries);
             }
             // Update school stats
-            const schoolStats = stats.schoolStats[schoolId];
+            const schoolStats = stats.schoolStats[safeSchoolId];
             schoolStats.totalWords += wordCount;
             schoolStats.totalEntries++;
-            schoolStats.emotionDistribution[emotion] = (schoolStats.emotionDistribution[emotion] || 0) + 1;
+            schoolStats.emotionDistribution[safeEmotion] = (schoolStats.emotionDistribution[safeEmotion] || 0) + 1;
             if (entryDate > weekAgo) {
                 schoolStats.weeklyEntries = (schoolStats.weeklyEntries || 0) + 1;
                 schoolStats.weeklyAvgWords = Math.round(wordCount / schoolStats.weeklyEntries);
@@ -947,10 +952,10 @@ const analyzeDiaryEntries = async (req, res) => {
                 schoolStats.monthlyAvgWords = Math.round(wordCount / schoolStats.monthlyEntries);
             }
             // Update district stats
-            const districtStats = stats.districtStats[districtId];
+            const districtStats = stats.districtStats[safeDistrictId];
             districtStats.totalWords += wordCount;
             districtStats.totalEntries++;
-            districtStats.emotionDistribution[emotion] = (districtStats.emotionDistribution[emotion] || 0) + 1;
+            districtStats.emotionDistribution[safeEmotion] = (districtStats.emotionDistribution[safeEmotion] || 0) + 1;
             if (entryDate > weekAgo) {
                 districtStats.weeklyEntries = (districtStats.weeklyEntries || 0) + 1;
                 districtStats.weeklyAvgWords = Math.round(wordCount / districtStats.weeklyEntries);
