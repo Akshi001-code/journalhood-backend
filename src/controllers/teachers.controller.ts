@@ -1156,6 +1156,11 @@ export const getTeacherAnalytics = async (req: Request, res: Response) => {
       timestamp: latestAnalytics.timestamp,
       totalWords: classData.totalWords || 0,
       totalEntries: classData.totalEntries || 0,
+      avgWordsPerStudent: (typeof classData.avgWordsPerStudent === 'number' && classData.avgWordsPerStudent > 0)
+        ? Math.round(classData.avgWordsPerStudent)
+        : (classData.totalWords && classData.activeStudents && classData.activeStudents > 0)
+          ? Math.round(classData.totalWords / classData.activeStudents)
+          : 0,
       classStats: {
         [resolvedClassId]: classData
       },
